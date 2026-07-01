@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "linux-taskbar-helper"
+version = "0.1.0"
+description = "KDE Plasma overlay: hold Meta to show numbered badges above pinned taskbar icons"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "André Franciscato Paggi" }]
+keywords = ["kde", "plasma", "wayland", "taskbar", "overlay", "layer-shell"]
+dependencies = ["evdev>=1.6.0"]
+
+[project.urls]
+Homepage = "https://github.com/andre-f-paggi/linux-taskbar-helper"
+Issues = "https://github.com/andre-f-paggi/linux-taskbar-helper/issues"
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "ruff>=0.4"]
+
+[project.scripts]
+taskbar-overlay = "taskbar_overlay:main"
+
+[tool.setuptools]
+py-modules = ["taskbar_config", "taskbar_overlay"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# The overlay entry point must set LD_PRELOAD and call gi.require_version()
+# before the GTK import, so those imports cannot sit at the top of the file.
+"taskbar_overlay.py" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

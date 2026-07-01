@@ -6,12 +6,11 @@ Requires: python-evdev, GTK4, gtk4-layer-shell (all available via gi)
 User must be in the 'input' group: sudo usermod -aG input $USER
 """
 
-import sys
 import os
-import re
+import selectors
+import sys
 import threading
 import time
-import selectors
 from pathlib import Path
 
 
@@ -36,166 +35,31 @@ def _ensure_layer_shell_preload():
 _ensure_layer_shell_preload()
 
 import gi
+
 gi.require_version('Gtk', '4.0')
 gi.require_version('Gtk4LayerShell', '1.0')
 gi.require_version('Pango', '1.0')
 gi.require_version('PangoCairo', '1.0')
-from gi.repository import Gtk, Gtk4LayerShell, GLib, Gdk, Pango, PangoCairo
-import cairo
+from gi.repository import GLib, Gtk, Gtk4LayerShell, Pango, PangoCairo
+
+from taskbar_config import (
+    __version__,
+    cfg_bool,
+    cfg_float,
+    cfg_int,
+    load_config,
+    read_panel_thickness,
+    read_pinned_apps,
+)
 
 try:
     import evdev
     from evdev import InputDevice, ecodes
     _EVDEV_OK = True
+    META_KEYS = {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA}
 except ImportError:
     _EVDEV_OK = False
-
-
-# ── Config paths ──────────────────────────────────────────────────────────────
-
-PLASMA_APPLETS = Path.home() / '.config' / 'plasma-org.kde.plasma.desktop-appletsrc'
-PLASMA_SHELL   = Path.home() / '.config' / 'plasmashellrc'
-OVERLAY_CONFIG = Path.home() / '.config' / 'taskbar-overlay.ini'
-
-META_KEYS = {ecodes.KEY_LEFTMETA, ecodes.KEY_RIGHTMETA}
-
-
-# ── Config file ───────────────────────────────────────────────────────────────
-
-DEFAULTS = {
-    'hold_duration':        '1.0',   # seconds before overlay appears
-    'panel_thickness':      'auto',  # px, 'auto' reads from plasmashellrc
-    'panel_bottom_margin':  '8',     # floating panel gap from screen bottom (px)
-    'overlay_gap':          '6',     # gap between panel top and overlay bottom (px)
-    'overlay_height':       '56',    # overlay window height (px)
-    'badge_size':           '34',    # diameter of each number circle (px)
-    'left_margin_px':       '0',     # skip N px from left before first badge
-    'right_margin_px':      '0',     # skip N px from right after last badge
-    'show_app_names':       'false', # show app names below numbers
-    'font_size_number':     '15',    # badge number font size
-    'font_size_name':       '9',     # app name font size
-}
-
-
-def load_config():
-    cfg = dict(DEFAULTS)
-    if OVERLAY_CONFIG.exists():
-        for line in OVERLAY_CONFIG.read_text().splitlines():
-            line = line.strip()
-            if line and not line.startswith('#') and '=' in line:
-                k, v = line.split('=', 1)
-                cfg[k.strip()] = v.strip()
-    return cfg
-
-
-def cfg_float(cfg, key):
-    return float(cfg.get(key, DEFAULTS[key]))
-
-
-def cfg_int(cfg, key):
-    return int(cfg.get(key, DEFAULTS[key]))
-
-
-def cfg_bool(cfg, key):
-    return cfg.get(key, DEFAULTS[key]).lower() in ('true', '1', 'yes')
-
-
-# ── KDE config parsers ────────────────────────────────────────────────────────
-
-def read_panel_thickness():
-    """Read panel thickness from plasmashellrc or waybar config."""
-    if PLASMA_SHELL.exists():
-        content = PLASMA_SHELL.read_text(errors='replace')
-        m = re.search(r'^\s*thickness\s*=\s*(\d+)', content, re.MULTILINE)
-        if m:
-            return int(m.group(1))
-
-    # Try waybar config
-    for p in [
-        Path.home() / '.config/waybar/config',
-        Path.home() / '.config/waybar/config.jsonc',
-        Path('/etc/xdg/waybar/config'),
-    ]:
-        if p.exists():
-            content = p.read_text(errors='replace')
-            m = re.search(r'"height"\s*:\s*(\d+)', content)
-            if m:
-                return int(m.group(1))
-
-    return 32  # waybar default when no config found
-
-
-def read_pinned_apps():
-    """Return list of human-readable app names from the icon task manager."""
-    if not PLASMA_APPLETS.exists():
-        return []
-
-    content = PLASMA_APPLETS.read_text(errors='replace')
-    m = re.search(r'^launchers=(.+)$', content, re.MULTILINE)
-    if not m:
-        return []
-
-    names = []
-    for entry in m.group(1).split(','):
-        entry = entry.strip()
-        if not entry:
-            continue
-        desktop = _entry_to_desktop_file(entry)
-        names.append(_desktop_name(desktop) if desktop else _fallback_name(entry))
-    return names
-
-
-def _entry_to_desktop_file(entry):
-    if 'applications:' in entry:
-        return entry.split('applications:')[-1].strip()
-    if entry.startswith('file://'):
-        return entry[7:]  # absolute path
-    if 'preferred://' in entry:
-        kind = entry.split('preferred://')[-1].strip()
-        return _preferred_desktop(kind)
-    return None
-
-
-def _preferred_desktop(kind):
-    """Resolve preferred://X to a .desktop filename."""
-    mapping = {
-        'filemanager': 'org.kde.dolphin.desktop',
-        'browser':     'browser.desktop',
-        'terminal':    'org.kde.konsole.desktop',
-    }
-    return mapping.get(kind)
-
-
-def _desktop_name(desktop_path):
-    """Read Name= from a .desktop file path or filename."""
-    search_dirs = [
-        Path.home() / '.local/share/applications',
-        Path('/usr/share/applications'),
-        Path('/usr/local/share/applications'),
-        Path('/var/lib/flatpak/exports/share/applications'),
-        Path('/var/lib/snapd/desktop/applications'),
-    ]
-
-    # If absolute path, check directly
-    p = Path(desktop_path)
-    candidates = [p] if p.is_absolute() else [d / desktop_path for d in search_dirs]
-
-    for candidate in candidates:
-        if candidate.exists():
-            content = candidate.read_text(errors='replace')
-            nm = re.search(r'^Name=(.+)$', content, re.MULTILINE)
-            if nm:
-                return nm.group(1).strip()
-
-    # Fallback: strip extension and path
-    return _fallback_name(desktop_path)
-
-
-def _fallback_name(entry):
-    name = Path(entry).stem
-    name = name.split('.')[-1]           # org.kde.konsole → konsole
-    name = re.sub(r'-', ' ', name)
-    return name.capitalize()
+    META_KEYS = set()
 
 
 # ── Overlay window ────────────────────────────────────────────────────────────
@@ -261,7 +125,8 @@ class OverlayWindow(Gtk.ApplicationWindow):
 
         surface = self.get_surface()
         if not isinstance(surface, GdkX11.X11Surface):
-            print("X11 fallback: GDK surface is not X11 — relaunch with GDK_BACKEND=x11", file=sys.stderr)
+            print("X11 fallback: GDK surface is not X11 — relaunch with GDK_BACKEND=x11",
+                  file=sys.stderr)
             print("  export GDK_BACKEND=x11 && python3 taskbar_overlay.py", file=sys.stderr)
             return
 
@@ -434,7 +299,8 @@ class OverlayApp(Gtk.Application):
         if not _EVDEV_OK:
             print("ERROR: python-evdev not installed.")
             print("Install: pip install evdev")
-            print("Then add yourself to input group: sudo usermod -aG input $USER  (re-login after)")
+            print("Then add yourself to input group: "
+                  "sudo usermod -aG input $USER  (re-login after)")
             self.quit()
             return
 
@@ -469,6 +335,9 @@ class OverlayApp(Gtk.Application):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] in ('--version', '-V'):
+        print(f"taskbar-overlay {__version__}")
+        sys.exit(0)
     app = OverlayApp()
     sys.exit(app.run(sys.argv))
 
