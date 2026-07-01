@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- Support for panels on **any screen edge** (top, bottom, left, right). The panel edge
+  is auto-detected from the KDE config and can be overridden with `panel_edge`. Badges
+  lay out horizontally for top/bottom panels and vertically for left/right panels.
+- `top_margin_px` / `bottom_margin_px` config keys to align badges along a vertical panel.
+
 ## [0.1.0] - 2026-06-30
 
 ### Added

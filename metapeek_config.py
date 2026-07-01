@@ -36,17 +36,25 @@ DEFAULT_WAYBAR_PATHS = (
 
 DEFAULTS = {
     "hold_duration":        "1.0",   # seconds before overlay appears
+    "panel_edge":           "auto",  # top|bottom|left|right, 'auto' reads from KDE config
     "panel_thickness":      "auto",  # px, 'auto' reads from plasmashellrc
-    "panel_bottom_margin":  "8",     # floating panel gap from screen bottom (px)
-    "overlay_gap":          "6",     # gap between panel top and overlay bottom (px)
-    "overlay_height":       "56",    # overlay window height (px)
+    "panel_bottom_margin":  "8",     # floating panel gap from its screen edge (px)
+    "overlay_gap":          "6",     # gap between the panel and the overlay (px)
+    "overlay_height":       "56",    # strip breadth in px (height if horizontal, width if vertical)
     "badge_size":           "34",    # diameter of each number circle (px)
-    "left_margin_px":       "0",     # skip N px from left before first badge
-    "right_margin_px":      "0",     # skip N px from right after last badge
-    "show_app_names":       "false", # show app names below numbers
+    "left_margin_px":       "0",     # horizontal panels: skip N px from left before first badge
+    "right_margin_px":      "0",     # horizontal panels: skip N px from right after last badge
+    "top_margin_px":        "0",     # vertical panels: skip N px from top before first badge
+    "bottom_margin_px":     "0",     # vertical panels: skip N px from bottom after last badge
+    "show_app_names":       "false", # show app names next to numbers
     "font_size_number":     "15",    # badge number font size
     "font_size_name":       "9",     # app name font size
 }
+
+# Plasma::Types::Location — the panel containment's `location=` value in the
+# appletsrc encodes which screen edge the panel is docked to.
+EDGE_BY_LOCATION = {3: "top", 4: "bottom", 5: "left", 6: "right"}
+VALID_EDGES = ("top", "bottom", "left", "right")
 
 
 def load_config(path=OVERLAY_CONFIG):
@@ -94,6 +102,33 @@ def read_panel_thickness(plasma_shell=PLASMA_SHELL, waybar_paths=DEFAULT_WAYBAR_
                 return int(m.group(1))
 
     return 32  # waybar default when no config found
+
+
+def read_panel_edge(applets=PLASMA_APPLETS):
+    """Return which screen edge the panel is docked to: top/bottom/left/right.
+
+    Reads the panel containment's ``location=`` from the appletsrc. Desktop
+    containments use non-edge locations (0-2), so the first edge value found
+    belongs to a panel. Defaults to 'bottom' when nothing is detected.
+    """
+    applets = Path(applets)
+    if not applets.exists():
+        return "bottom"
+
+    content = applets.read_text(errors="replace")
+    for m in re.finditer(r"^location=(\d+)", content, re.MULTILINE):
+        edge = EDGE_BY_LOCATION.get(int(m.group(1)))
+        if edge:
+            return edge
+    return "bottom"
+
+
+def resolve_panel_edge(cfg, applets=PLASMA_APPLETS):
+    """Resolve the configured ``panel_edge`` (honoring 'auto') to a valid edge."""
+    edge = cfg.get("panel_edge", "auto").strip().lower()
+    if edge in VALID_EDGES:
+        return edge
+    return read_panel_edge(applets)
 
 
 def read_pinned_apps(applets=PLASMA_APPLETS, search_dirs=DEFAULT_APPLICATION_DIRS):

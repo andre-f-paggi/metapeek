@@ -51,6 +51,7 @@ from metapeek_config import (
     load_config,
     read_panel_thickness,
     read_pinned_apps,
+    resolve_panel_edge,
 )
 
 try:
@@ -69,29 +70,37 @@ class OverlayWindow(Gtk.ApplicationWindow):
     def __init__(self, app, apps, cfg):
         super().__init__(application=app)
 
+        self.apps = apps
+        self.cfg  = cfg
+        self._layer_ok = None  # resolved on first realize
+        self.edge = resolve_panel_edge(cfg)
+        self.horizontal = self.edge in ('top', 'bottom')
+
         # init_for_window MUST come before set_decorated and any GTK surface setup,
         # otherwise GTK4/Wayland realizes the window as a plain xdg_toplevel first
         Gtk4LayerShell.init_for_window(self)
         Gtk4LayerShell.set_layer(self, Gtk4LayerShell.Layer.TOP)
         Gtk4LayerShell.set_keyboard_mode(self, Gtk4LayerShell.KeyboardMode.NONE)
-        Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.BOTTOM, True)
-        Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.LEFT,   True)
-        Gtk4LayerShell.set_anchor(self, Gtk4LayerShell.Edge.RIGHT,  True)
+
+        # Anchor to the panel's edge; stretch along the perpendicular axis so the
+        # strip spans the panel's full length.
+        E = Gtk4LayerShell.Edge
+        anchor_edge = {
+            'bottom': E.BOTTOM, 'top': E.TOP, 'left': E.LEFT, 'right': E.RIGHT,
+        }[self.edge]
+        span_edges = (E.LEFT, E.RIGHT) if self.horizontal else (E.TOP, E.BOTTOM)
+        for e in span_edges:
+            Gtk4LayerShell.set_anchor(self, e, True)
+        Gtk4LayerShell.set_anchor(self, anchor_edge, True)
         Gtk4LayerShell.set_exclusive_zone(self, 0)
 
         # KWin's wlr-layer-shell implementation already reserves space for the
-        # real panel's exclusive zone, so anchoring BOTTOM lands right above
-        # it automatically. Adding panel thickness here would double-count it.
-        margin_b = cfg_int(cfg, 'panel_bottom_margin') + cfg_int(cfg, 'overlay_gap')
-        Gtk4LayerShell.set_margin(self, Gtk4LayerShell.Edge.BOTTOM, margin_b)
-
-        self.apps = apps
-        self.cfg  = cfg
-        self._layer_ok = None  # resolved on first realize
+        # real panel's exclusive zone, so anchoring to its edge lands right next
+        # to it. Adding the panel thickness here would double-count it.
+        panel_gap = cfg_int(cfg, 'panel_bottom_margin') + cfg_int(cfg, 'overlay_gap')
+        Gtk4LayerShell.set_margin(self, anchor_edge, panel_gap)
 
         self.set_decorated(False)
-        self.set_default_size(100, cfg_int(cfg, 'overlay_height'))
-        self.connect('realize', self._on_realize)
 
         # Transparent background via CSS
         css = Gtk.CssProvider()
@@ -100,9 +109,17 @@ class OverlayWindow(Gtk.ApplicationWindow):
             self.get_display(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-        # Drawing area — must set explicit height or layer-shell collapses it
+        # Drawing area — fix the strip breadth on the axis perpendicular to the
+        # panel, or layer-shell collapses it. Horizontal panel → fixed height;
+        # vertical panel → fixed width.
+        breadth = cfg_int(cfg, 'overlay_height')
         self.area = Gtk.DrawingArea()
-        self.area.set_content_height(cfg_int(cfg, 'overlay_height'))
+        if self.horizontal:
+            self.area.set_content_height(breadth)
+            self.set_default_size(100, breadth)
+        else:
+            self.area.set_content_width(breadth)
+            self.set_default_size(breadth, 100)
         self.area.set_draw_func(self._draw, None)
         self.set_child(self.area)
 
@@ -110,7 +127,7 @@ class OverlayWindow(Gtk.ApplicationWindow):
         ok = Gtk4LayerShell.is_layer_window(self)
         self._layer_ok = ok
         if ok:
-            print("layer-shell: active, window anchored to screen bottom")
+            print(f"layer-shell: active, window anchored to {self.edge} edge")
         else:
             print("layer-shell: FAILED — KWin rejected protocol. Falling back to X11 positioning.")
             self._apply_x11_fallback()
@@ -145,9 +162,19 @@ class OverlayWindow(Gtk.ApplicationWindow):
 
             panel_h  = (read_panel_thickness() if cfg.get('panel_thickness') == 'auto'
                         else cfg_int(cfg, 'panel_thickness'))
-            ov_h     = cfg_int(cfg, 'overlay_height')
-            margin_b = panel_h + cfg_int(cfg, 'panel_bottom_margin') + cfg_int(cfg, 'overlay_gap')
-            win_y    = sh - margin_b - ov_h
+            breadth  = cfg_int(cfg, 'overlay_height')
+            gap      = panel_h + cfg_int(cfg, 'panel_bottom_margin') + cfg_int(cfg, 'overlay_gap')
+
+            # Window rect on the panel's edge; the strip spans the full screen
+            # length along the perpendicular axis.
+            if self.edge == 'bottom':
+                x, y, w, h = 0, sh - gap - breadth, sw, breadth
+            elif self.edge == 'top':
+                x, y, w, h = 0, gap, sw, breadth
+            elif self.edge == 'left':
+                x, y, w, h = gap, 0, breadth, sh
+            else:  # right
+                x, y, w, h = sw - gap - breadth, 0, breadth, sh
 
             # Override-redirect: WM stops managing this window
             class _XSWAttrs(ctypes.Structure):
@@ -158,10 +185,10 @@ class OverlayWindow(Gtk.ApplicationWindow):
             attrs.override_redirect = 1
             CWOverrideRedirect = 1 << 9
             xlib.XChangeWindowAttributes(xdpy, xid, CWOverrideRedirect, ctypes.byref(attrs))
-            xlib.XMoveResizeWindow(xdpy, xid, 0, win_y, sw, ov_h)
+            xlib.XMoveResizeWindow(xdpy, xid, x, y, w, h)
             xlib.XRaiseWindow(xdpy, xid)
             xlib.XFlush(xdpy)
-            print(f"X11 fallback: positioned at y={win_y}, {sw}x{ov_h}")
+            print(f"X11 fallback: {self.edge} edge at ({x},{y}) {w}x{h}")
         except Exception as e:
             print(f"X11 fallback error: {e}", file=sys.stderr)
             print("Relaunch with: GDK_BACKEND=x11 python3 metapeek.py", file=sys.stderr)
@@ -173,23 +200,35 @@ class OverlayWindow(Gtk.ApplicationWindow):
 
         cfg          = self.cfg
         badge        = cfg_int(cfg, 'badge_size')
-        left_skip    = cfg_int(cfg, 'left_margin_px')
-        right_skip   = cfg_int(cfg, 'right_margin_px')
         show_names   = cfg_bool(cfg, 'show_app_names')
         font_num     = cfg_int(cfg, 'font_size_number')
         font_nm      = cfg_int(cfg, 'font_size_name')
 
-        usable_w  = width - left_skip - right_skip
-        slot_w    = usable_w / n
-        cy_badge  = height * 0.42 if show_names else height / 2
+        # 'along' is the axis the badges are distributed on (parallel to the
+        # panel); 'cross' is the strip breadth (perpendicular to the panel).
+        if self.horizontal:
+            along_len  = width
+            cross_len  = height
+            start_skip = cfg_int(cfg, 'left_margin_px')
+            end_skip   = cfg_int(cfg, 'right_margin_px')
+        else:
+            along_len  = height
+            cross_len  = width
+            start_skip = cfg_int(cfg, 'top_margin_px')
+            end_skip   = cfg_int(cfg, 'bottom_margin_px')
+
+        slot = (along_len - start_skip - end_skip) / n
+        # Shift toward the panel to leave room for names (horizontal strips only).
+        cross_c = cross_len * 0.42 if (show_names and self.horizontal) else cross_len / 2
 
         for i, name in enumerate(self.apps):
-            cx = left_skip + (i + 0.5) * slot_w
+            along = start_skip + (i + 0.5) * slot
+            cx, cy = (along, cross_c) if self.horizontal else (cross_c, along)
 
             # Dark semi-transparent circle
             cr.new_path()  # drop stray current-point from previous badge's text draw,
                             # otherwise cairo's arc() draws a connecting line to it
-            cr.arc(cx, cy_badge, badge / 2, 0, 2 * 3.14159)
+            cr.arc(cx, cy, badge / 2, 0, 2 * 3.14159)
             cr.set_source_rgba(0.05, 0.05, 0.05, 0.82)
             cr.fill_preserve()
             cr.set_source_rgba(1, 1, 1, 0.18)
@@ -197,12 +236,12 @@ class OverlayWindow(Gtk.ApplicationWindow):
             cr.stroke()
 
             # Number
-            _draw_text(cr, str(i + 1), cx, cy_badge,
+            _draw_text(cr, str(i + 1), cx, cy,
                        font_num, bold=True, rgba=(1, 1, 1, 1))
 
             # Optional app name
             if show_names:
-                _draw_text(cr, name, cx, cy_badge + badge / 2 + 2 + font_nm * 0.6,
+                _draw_text(cr, name, cx, cy + badge / 2 + 2 + font_nm * 0.6,
                            font_nm, bold=False, rgba=(0.9, 0.9, 0.9, 0.9))
 
 

@@ -82,6 +82,48 @@ def test_read_panel_thickness_default_when_nothing_found(tmp_path):
     assert tc.read_panel_thickness(tmp_path / "nope", waybar_paths=()) == 32
 
 
+# ── Panel edge ────────────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("location,expected", [
+    (3, "top"), (4, "bottom"), (5, "left"), (6, "right"),
+])
+def test_read_panel_edge_from_location(tmp_path, location, expected):
+    applets = tmp_path / "appletsrc"
+    applets.write_text(
+        "[Containments][26][General]\nlocation=0\n"          # desktop, ignored
+        f"[Containments][27][General]\nlocation={location}\n"  # panel
+    )
+    assert tc.read_panel_edge(applets=applets) == expected
+
+
+def test_read_panel_edge_defaults_to_bottom_when_no_edge(tmp_path):
+    applets = tmp_path / "appletsrc"
+    applets.write_text("[Containments][26][General]\nlocation=0\n")
+    assert tc.read_panel_edge(applets=applets) == "bottom"
+
+
+def test_read_panel_edge_missing_file(tmp_path):
+    assert tc.read_panel_edge(applets=tmp_path / "nope") == "bottom"
+
+
+def test_resolve_panel_edge_honors_explicit_override(tmp_path):
+    applets = tmp_path / "appletsrc"
+    applets.write_text("location=4\n")  # config says bottom...
+    assert tc.resolve_panel_edge({"panel_edge": "left"}, applets=applets) == "left"
+
+
+def test_resolve_panel_edge_auto_reads_config(tmp_path):
+    applets = tmp_path / "appletsrc"
+    applets.write_text("[Containments][27][General]\nlocation=6\n")
+    assert tc.resolve_panel_edge({"panel_edge": "auto"}, applets=applets) == "right"
+
+
+def test_resolve_panel_edge_invalid_value_falls_back_to_auto(tmp_path):
+    applets = tmp_path / "appletsrc"
+    applets.write_text("[Containments][27][General]\nlocation=3\n")
+    assert tc.resolve_panel_edge({"panel_edge": "sideways"}, applets=applets) == "top"
+
+
 # ── Launcher entry parsing ────────────────────────────────────────────────────
 
 @pytest.mark.parametrize("entry,expected", [
