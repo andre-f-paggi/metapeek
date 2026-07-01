@@ -1,6 +1,6 @@
-# linux-taskbar-helper
+# MetaPeek
 
-**Hold the Meta (Super/Win) key to flash numbered badges over your pinned taskbar
+**Hold the Meta (Super/Win) key to peek at numbered badges over your pinned taskbar
 icons — so you can see which `Meta+1`, `Meta+2`, … shortcut launches what.**
 
 KDE Plasma lets you focus or launch pinned Task Manager entries with `Meta+<number>`,
@@ -25,8 +25,8 @@ hold Meta. Release the key and it disappears.
 ## Install
 
 ```bash
-git clone https://github.com/andre-f-paggi/linux-taskbar-helper.git
-cd linux-taskbar-helper
+git clone https://github.com/andre-f-paggi/metapeek.git
+cd metapeek
 ./setup.sh          # installs deps + adds you to the 'input' group
 ```
 
@@ -45,14 +45,14 @@ sudo usermod -aG input "$USER"    # then log out and back in
 ## Run
 
 ```bash
-python3 taskbar_overlay.py
+python3 metapeek.py
 ```
 
 Hold **Meta** for ~1 second: numbered badges appear above your pinned icons.
 Release to hide. Check it works with:
 
 ```bash
-python3 taskbar_overlay.py --version
+python3 metapeek.py --version
 ```
 
 ### Autostart
@@ -60,12 +60,12 @@ python3 taskbar_overlay.py --version
 Add it to **System Settings → Autostart → Add Application**, with the command:
 
 ```
-python3 /full/path/to/linux-taskbar-helper/taskbar_overlay.py
+python3 /full/path/to/metapeek/metapeek.py
 ```
 
 ## Configure
 
-All tuning is optional and lives in `~/.config/taskbar-overlay.ini`
+All tuning is optional and lives in `~/.config/metapeek.ini`
 (a flat `key=value` file; lines starting with `#` are ignored). Any key you omit
 falls back to its default:
 
@@ -107,9 +107,9 @@ overlay_gap=4
 
 ## How it works
 
-- **`taskbar_config.py`** — pure, dependency-free parsing of the KDE/Waybar config files
+- **`metapeek_config.py`** — pure, dependency-free parsing of the KDE/Waybar config files
   and the overlay `.ini`. This is the unit-tested core.
-- **`taskbar_overlay.py`** — the GTK4 layer-shell window plus the evdev key-monitor thread.
+- **`metapeek.py`** — the GTK4 layer-shell window plus the evdev key-monitor thread.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the dev setup, tests, and the CI contract.
 

@@ -1,8 +1,8 @@
-"""Unit tests for taskbar_config — pure logic, no GTK/evdev/display needed."""
+"""Unit tests for metapeek_config — pure logic, no GTK/evdev/display needed."""
 
 import pytest
 
-import taskbar_config as tc
+import metapeek_config as tc
 
 # ── Overlay config file ───────────────────────────────────────────────────────
 

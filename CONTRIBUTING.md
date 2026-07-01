@@ -1,20 +1,20 @@
 # Contributing
 
-Thanks for your interest in improving linux-taskbar-helper! This is a small project,
+Thanks for your interest in improving metapeek! This is a small project,
 so the process is light.
 
 ## Project layout
 
 | File | Responsibility |
 |------|----------------|
-| `taskbar_config.py` | Pure, stdlib-only parsing of KDE/Waybar config + the overlay `.ini`. **Unit-tested.** |
-| `taskbar_overlay.py` | The GTK4 layer-shell overlay window and the evdev key-monitor thread. |
-| `tests/` | `pytest` suite covering `taskbar_config.py`. |
+| `metapeek_config.py` | Pure, stdlib-only parsing of KDE/Waybar config + the overlay `.ini`. **Unit-tested.** |
+| `metapeek.py` | The GTK4 layer-shell overlay window and the evdev key-monitor thread. |
+| `tests/` | `pytest` suite covering `metapeek_config.py`. |
 | `setup.sh` | One-shot dependency + `input` group installer (Arch). |
 
-Keep display-independent logic in `taskbar_config.py` so it stays testable without a
+Keep display-independent logic in `metapeek_config.py` so it stays testable without a
 GTK runtime or a Wayland session. Anything that touches GTK, evdev, or the live desktop
-belongs in `taskbar_overlay.py`.
+belongs in `metapeek.py`.
 
 ## Dev setup
 
@@ -36,8 +36,8 @@ ruff check .          # lint + import sort
 pytest -q             # unit tests
 ```
 
-Both must pass. If you change behavior in `taskbar_config.py`, add or update a test
-in `tests/test_config.py`.
+Both must pass. If you change behavior in `metapeek_config.py`, add or update a test
+in `tests/test_metapeek_config.py`.
 
 ## Conventions
 
@@ -50,5 +50,5 @@ in `tests/test_config.py`.
 ## Releasing (maintainers)
 
 1. Move the `## [Unreleased]` entries into a new `## [x.y.z] - YYYY-MM-DD` section.
-2. Bump `version` in `pyproject.toml` and `__version__` in `taskbar_config.py`.
+2. Bump `version` in `pyproject.toml` and `__version__` in `metapeek_config.py`.
 3. Commit, then tag: `git tag vX.Y.Z && git push --tags`.

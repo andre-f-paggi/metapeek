@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-KDE taskbar position overlay.
-Hold Meta (Win) for 1 second to see numbered badges above the panel.
+MetaPeek — KDE taskbar shortcut overlay.
+Hold Meta (Win) for 1 second to see numbered badges above the panel,
+revealing which Meta+N shortcut launches which pinned app.
 Requires: python-evdev, GTK4, gtk4-layer-shell (all available via gi)
 User must be in the 'input' group: sudo usermod -aG input $USER
 """
@@ -17,7 +18,7 @@ from pathlib import Path
 def _ensure_layer_shell_preload():
     """gtk4-layer-shell must be loaded before libwayland-client or KWin
     rejects the layer surface. Re-exec ourselves with LD_PRELOAD set."""
-    if os.environ.get('_TASKBAR_OVERLAY_RELAUNCHED'):
+    if os.environ.get('_METAPEEK_RELAUNCHED'):
         return
     for candidate in ('/usr/lib/libgtk4-layer-shell.so',
                        '/usr/lib64/libgtk4-layer-shell.so',
@@ -26,7 +27,7 @@ def _ensure_layer_shell_preload():
             env = os.environ.copy()
             existing = env.get('LD_PRELOAD', '')
             env['LD_PRELOAD'] = f'{candidate}:{existing}' if existing else candidate
-            env['_TASKBAR_OVERLAY_RELAUNCHED'] = '1'
+            env['_METAPEEK_RELAUNCHED'] = '1'
             os.execvpe(sys.executable, [sys.executable] + sys.argv, env)
     print("WARNING: libgtk4-layer-shell.so not found, layer-shell may fail to init.",
           file=sys.stderr)
@@ -42,7 +43,7 @@ gi.require_version('Pango', '1.0')
 gi.require_version('PangoCairo', '1.0')
 from gi.repository import GLib, Gtk, Gtk4LayerShell, Pango, PangoCairo
 
-from taskbar_config import (
+from metapeek_config import (
     __version__,
     cfg_bool,
     cfg_float,
@@ -127,7 +128,7 @@ class OverlayWindow(Gtk.ApplicationWindow):
         if not isinstance(surface, GdkX11.X11Surface):
             print("X11 fallback: GDK surface is not X11 — relaunch with GDK_BACKEND=x11",
                   file=sys.stderr)
-            print("  export GDK_BACKEND=x11 && python3 taskbar_overlay.py", file=sys.stderr)
+            print("  export GDK_BACKEND=x11 && python3 metapeek.py", file=sys.stderr)
             return
 
         cfg = self.cfg
@@ -163,7 +164,7 @@ class OverlayWindow(Gtk.ApplicationWindow):
             print(f"X11 fallback: positioned at y={win_y}, {sw}x{ov_h}")
         except Exception as e:
             print(f"X11 fallback error: {e}", file=sys.stderr)
-            print("Relaunch with: GDK_BACKEND=x11 python3 taskbar_overlay.py", file=sys.stderr)
+            print("Relaunch with: GDK_BACKEND=x11 python3 metapeek.py", file=sys.stderr)
 
     def _draw(self, area, cr, width, height, _data):
         n = len(self.apps)
@@ -292,7 +293,7 @@ def monitor_keys(hold_duration, on_show, on_hide):
 
 class OverlayApp(Gtk.Application):
     def __init__(self):
-        super().__init__(application_id='io.github.linux-taskbar-helper')
+        super().__init__(application_id='io.github.metapeek')
         self.win = None
 
     def do_activate(self):
@@ -336,7 +337,7 @@ class OverlayApp(Gtk.Application):
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] in ('--version', '-V'):
-        print(f"taskbar-overlay {__version__}")
+        print(f"metapeek {__version__}")
         sys.exit(0)
     app = OverlayApp()
     sys.exit(app.run(sys.argv))

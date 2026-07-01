@@ -2,7 +2,7 @@
 
 This module deliberately imports only the standard library so it can be
 unit-tested and reused without a display server, GTK, or evdev present.
-The GTK/evdev overlay lives in ``taskbar_overlay.py`` and imports from here.
+The GTK/evdev overlay lives in ``metapeek.py`` and imports from here.
 """
 
 import re
@@ -15,7 +15,7 @@ __version__ = "0.1.0"
 
 PLASMA_APPLETS = Path.home() / ".config" / "plasma-org.kde.plasma.desktop-appletsrc"
 PLASMA_SHELL   = Path.home() / ".config" / "plasmashellrc"
-OVERLAY_CONFIG = Path.home() / ".config" / "taskbar-overlay.ini"
+OVERLAY_CONFIG = Path.home() / ".config" / "metapeek.ini"
 
 DEFAULT_APPLICATION_DIRS = (
     Path.home() / ".local/share/applications",

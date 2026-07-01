@@ -14,7 +14,7 @@ All notable changes to this project are documented here. The format is based on
 - Automatic `LD_PRELOAD` self-relaunch so `gtk4-layer-shell` loads before
   `libwayland-client` (otherwise KWin rejects the layer surface).
 - X11/XWayland fallback positioning when `wlr-layer-shell` is unavailable.
-- Configurable behavior via `~/.config/taskbar-overlay.ini` (badge size, margins,
+- Configurable behavior via `~/.config/metapeek.ini` (badge size, margins,
   hold duration, optional app names, fonts).
 - Reads panel thickness from `plasmashellrc` (or Waybar config) and pinned launcher
   names from `plasma-org.kde.plasma.desktop-appletsrc`.
@@ -28,5 +28,5 @@ All notable changes to this project are documented here. The format is based on
 - Removed a stray connecting line drawn between badges caused by a leftover Cairo
   current-point from the number-label rendering.
 
-[Unreleased]: https://github.com/andre-f-paggi/linux-taskbar-helper/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/andre-f-paggi/linux-taskbar-helper/releases/tag/v0.1.0
+[Unreleased]: https://github.com/andre-f-paggi/metapeek/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/andre-f-paggi/metapeek/releases/tag/v0.1.0

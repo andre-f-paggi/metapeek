@@ -24,10 +24,10 @@ test: venv ## Run the unit test suite
 check: lint test ## What CI runs: lint + tests
 
 run: ## Launch the overlay (needs system GTK libs + 'input' group)
-	python3 taskbar_overlay.py
+	python3 metapeek.py
 
 version: ## Print the version
-	python3 taskbar_overlay.py --version
+	python3 metapeek.py --version
 
 clean: ## Remove the dev virtualenv and caches
 	rm -rf $(VENV) .pytest_cache .ruff_cache __pycache__ tests/__pycache__
