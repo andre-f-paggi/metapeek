@@ -1,0 +1,3 @@
+evdev>=1.6.0
+# GTK4, gtk4-layer-shell, Pango, PangoCairo via system gi (python-gobject)
+# Install on Arch: sudo pacman -S python-gobject gtk4 gtk4-layer-shell
